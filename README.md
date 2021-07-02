@@ -1,2 +1,9 @@
 # inadvertent-adversaries
-An exploration of how inadvertent adversarial attacks may arise from scientific data collection pipelines, such as LSST.
+An exploration of how inadvertent adversarial attacks may arise from scientific data collection pipelines, such as LSST. Includes church window plotting method.
+
+Church window plots derive their name from a colorful representation of latent space around a given input example that resembles panes of stained glass. These colors map onto the potential classes available for classification. This provides information on how a given perturbation in latent space affects the classification of a particular example image.
+
+To create each plot, the unperturbed base image is situated at the origin. Then, the latent space representation or embedding of the unperturbed base image is subtracted from the embedding of both the noisy and one-pixel attacked image. These subtractions yield higher dimensional representations of the adversarial and noisy perturbation vectors in latent space, i.e. they point along the direction of the adversarial and noisy "attacks". We orient the plane such that the x axis lies along the adversarial direction and the y direction lies along the noisy direction. By this definition, the points (1, 0) and (0, 1) on the church window plot show the placement of the adversarial and noisy images, respectively.
+
+These vectors are then discretized into small steps in each direction. Iterating over all possible combinations of both the adversarial and noisy directions yields an overall perturbation vector $\eta(x,y)$ that is added to the embedding of the base image. This new embedding, which maps to a point on the grid and a pixel on the plot, is then passed into a truncated network of only the flattened layers. This truncated network necessarily shares the same weights as the flattened layers of the original network, and outputs the classification result of the given $\eta(x,y)$. This classification determines the color of that pixel in the grid.
+
