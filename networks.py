@@ -208,3 +208,23 @@ class DeepMergeV3(nn.Module):
             x = self.bottleneck(x)
         y = self.fc(x)
         return x, y
+
+class EndDMV3(nn.Module):
+    def __init__(self, use_bottleneck=True, bottleneck_dim=256, new_cls=3, class_num=3):
+        super(EndDMV3, self).__init__()
+        self.class_num = class_num
+        self.use_bottleneck = use_bottleneck
+        self.new_cls = new_cls
+        self.bottleneck = nn.Linear(32 * 12 * 12, bottleneck_dim)
+        self.bottleneck.weight.data.normal_(0, 0.005)
+        self.bottleneck.bias.data.fill_(0.0)
+        self.fc = nn.Linear(bottleneck_dim, class_num)
+        self.fc.weight.data.normal_(0, 0.01)
+        self.fc.bias.data.fill_(0.0)
+
+    def forward(self, x):
+        x = x.view(-1, 32 * 12 * 12)
+        if self.use_bottleneck and self.new_cls:
+            x = self.bottleneck(x)
+        y = self.fc(x)
+        return x, y
