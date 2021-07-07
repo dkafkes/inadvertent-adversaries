@@ -146,6 +146,7 @@ def church_window(use_gpu, base_network, embedding_network, image, noisy_image, 
         else:
             print("Didn't flip within chosen max iterations.")
 
+    return embedding1, noisy_embedding, perturbed_embedding
 
 def cw_plotter(use_gpu, embedding_network, groundt_label, change_to, embedding1, noisy_embedding, perturbed_embedding):
     LABELS = ('spiral', 'elliptical', 'merger')
