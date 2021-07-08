@@ -129,6 +129,10 @@ def church_window(use_gpu, base_network, embedding_network, image, noisy_image, 
 
     all_lab = [0, 1, 2]
     all_lab.remove(groundt_label)
+    
+    regular_embedding_list = []
+    noisy_embedding_list = []
+    adv_embedding_list = []
 
     for change_to in all_lab:
         print("Flip to: ", change_to)
@@ -144,10 +148,14 @@ def church_window(use_gpu, base_network, embedding_network, image, noisy_image, 
 
             cw_plotter(False, embedding_network, groundt_label, change_to, embedding1, noisy_embedding, perturbed_embedding)
             
-            return embedding1, noisy_embedding, perturbed_embedding
-
+            regular_embedding_list.append(embedding1)
+            noisy_embedding_list.append(noisy_embedding)
+            adv_embedding_list.append(perturbed_embedding)
+            
         else:
             print("Didn't flip within chosen max iterations.")
+    
+    return regular_embedding_list, noisy_embedding_list, adv_embedding_list
 
 def cw_plotter(use_gpu, embedding_network, groundt_label, change_to, embedding1, noisy_embedding, perturbed_embedding):
     LABELS = ('spiral', 'elliptical', 'merger')
