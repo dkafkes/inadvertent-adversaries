@@ -309,3 +309,24 @@ def cw_plotter(use_gpu, embedding_network, groundt_label, change_to, embedding1,
     plt.scatter([len(my_ax)//2], [np.where((my_ax < 1.0100000e+00) & (my_ax > 1.0000000e+00))], color = 'c', edgecolors = 'k', s = 70)
 
     plt.title(r'{} $\rightarrow$ {}'.format(LABELS[int(groundt_label)], LABELS[int(change_to)]))
+
+
+def dist_metric(reg_embed, noise_embed, pert_embed, pnorm = 2.0):
+  dist_noise, dist_pert = [], []
+
+  for i in range(len(reg_embed)):
+    dn = torch.cdist(reg_embed[i], noise_embed[i], p=pnorm)
+    dp = torch.cdist(reg_embed[i], pert_embed[i], p=pnorm)
+    #print("Eucledan distance to NOISY:", dn.item())
+    #print("Eucledan distance to PERTURBED:", dp.item())
+    dist_noise.append(dn.item())
+    dist_pert.append(dp.item())
+
+  mean_noise = np.mean(dist_noise,dtype=np.float64)
+  stdev_noise = np.std(dist_noise,dtype=np.float64)
+  mean_pert = np.mean(dist_pert,dtype=np.float64)
+  stdev_pert = np.std(dist_pert,dtype=np.float64)
+  print('Noisy mean and std:', mean_noise, stdev_noise)
+  print('Perturbed mean and std:', mean_pert, stdev_pert)
+
+  return mean_noise, stdev_noise, mean_pert, stdev_pert
