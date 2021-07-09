@@ -2,60 +2,60 @@ import torch.nn as nn
 from torchvision import models
 import torch.nn.functional as F
 
-class DeepMerge(nn.Module):
-    def __init__(self, use_bottleneck=False, new_cls=False, class_num=3):
-        super(DeepMerge, self).__init__()
-        self.class_num = class_num
-        self.use_bottleneck = use_bottleneck
-        self.new_cls = new_cls
-        self.in_features = 32 * 12 * 12
-        self.conv1 = nn.Conv2d(3, 8, kernel_size=5, stride=1, padding=2)
-        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
-        self.batchn1 = nn.BatchNorm2d(8)
-        self.batchn2 = nn.BatchNorm2d(16)
-        self.batchn3 = nn.BatchNorm2d(32)
-        #### cut here
-        self.fc1 = nn.Linear(32 * 12 * 12, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, class_num)
-        self.relu =  nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-    def forward(self, x):
-        x = self.maxpool(self.relu(self.batchn1(self.conv1(x))))
-        x = self.maxpool(self.relu(self.batchn2(self.conv2(x))))
-        x = self.maxpool(self.relu(self.batchn3(self.conv3(x))))
-        ### cut here, feed through dense layers
-        x = x.view(-1, 32 * 12 * 12) #vector here
-        y = F.relu(self.fc1(x))
-        y = F.relu(self.fc2(y))
-        y = self.fc3(y)
-        return x, y
+# class DeepMerge(nn.Module):
+#     def __init__(self, use_bottleneck=False, new_cls=False, class_num=3):
+#         super(DeepMerge, self).__init__()
+#         self.class_num = class_num
+#         self.use_bottleneck = use_bottleneck
+#         self.new_cls = new_cls
+#         self.in_features = 32 * 12 * 12
+#         self.conv1 = nn.Conv2d(3, 8, kernel_size=5, stride=1, padding=2)
+#         self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1)
+#         self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
+#         self.batchn1 = nn.BatchNorm2d(8)
+#         self.batchn2 = nn.BatchNorm2d(16)
+#         self.batchn3 = nn.BatchNorm2d(32)
+#         #### cut here
+#         self.fc1 = nn.Linear(32 * 12 * 12, 64)
+#         self.fc2 = nn.Linear(64, 32)
+#         self.fc3 = nn.Linear(32, class_num)
+#         self.relu =  nn.ReLU(inplace=True)
+#         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+#     def forward(self, x):
+#         x = self.maxpool(self.relu(self.batchn1(self.conv1(x))))
+#         x = self.maxpool(self.relu(self.batchn2(self.conv2(x))))
+#         x = self.maxpool(self.relu(self.batchn3(self.conv3(x))))
+#         ### cut here, feed through dense layers
+#         x = x.view(-1, 32 * 12 * 12) #vector here
+#         y = F.relu(self.fc1(x))
+#         y = F.relu(self.fc2(y))
+#         y = self.fc3(y)
+#         return x, y
         
-    def output_num(self):
-    	return self.in_features #(edited)
+#     def output_num(self):
+#     	return self.in_features #(edited)
     
-#half network to move around embedding
-class EndDM(nn.Module):
-    def __init__(self, use_bottleneck=False, new_cls=False, class_num=3):
-        super(EndDM, self).__init__()
-        self.class_num = class_num
-        #### cut here to pass the embedding in
-        self.fc1 = nn.Linear(32 * 12 * 12, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.fc3 = nn.Linear(32, class_num)
-        self.relu =  nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-    def forward(self, x):
-        ### cut here, feed through dense layers
-        x = x.view(-1, 32 * 12 * 12) #vector here
-        y = F.relu(self.fc1(x))
-        y = F.relu(self.fc2(y))
-        y = self.fc3(y)
-        return y
+# #half network to move around embedding
+# class EndDM(nn.Module):
+#     def __init__(self, use_bottleneck=False, new_cls=False, class_num=3):
+#         super(EndDM, self).__init__()
+#         self.class_num = class_num
+#         #### cut here to pass the embedding in
+#         self.fc1 = nn.Linear(32 * 12 * 12, 64)
+#         self.fc2 = nn.Linear(64, 32)
+#         self.fc3 = nn.Linear(32, class_num)
+#         self.relu =  nn.ReLU(inplace=True)
+#         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+#     def forward(self, x):
+#         ### cut here, feed through dense layers
+#         x = x.view(-1, 32 * 12 * 12) #vector here
+#         y = F.relu(self.fc1(x))
+#         y = F.relu(self.fc2(y))
+#         y = self.fc3(y)
+#         return y
         
-    def output_num(self):
-    	return self.in_features
+#     def output_num(self):
+#     	return self.in_features
 
 
 class ResNetFc(nn.Module):
@@ -98,10 +98,10 @@ class ResNetFc(nn.Module):
         x = self.feature_layers(x)
         x = x.view(x.size(0), -1)
         if self.use_bottleneck and self.new_cls:
-            int_x = self.bottleneck(x)
-            y = self.fc(int_x)
+            x = self.bottleneck(x)
+            y = self.fc(x)
         else:
-            y = self.fc(int_x)
+            y = self.fc(x)
         return x, y
     
     def output_num(self):
@@ -116,9 +116,6 @@ class EndResNetFc(nn.Module):
 
         if new_cls:
             if self.use_bottleneck:
-                self.bottleneck = nn.Linear(model_resnet.fc.in_features, bottleneck_dim)
-                self.bottleneck.weight.data.normal_(0, 0.005)
-                self.bottleneck.bias.data.fill_(0.0)
                 self.fc = nn.Linear(bottleneck_dim, class_num)
                 self.fc.weight.data.normal_(0, 0.01)
                 self.fc.bias.data.fill_(0.0)
@@ -132,48 +129,10 @@ class EndResNetFc(nn.Module):
             self.fc = model_resnet.fc
             self.__in_features = model_resnet.fc.in_features
     
-    def forward(self, x):
-        x = x.view(x.size(0), -1)
-        if self.use_bottleneck and self.new_cls:
-            x = self.bottleneck(x)
-            y = self.fc(x)
-        else:
-            y = self.fc(x)
+    def forward(self, x): 
+        y = self.fc(x)
         return y
-    
-    def output_num(self):
-        return self.__in_features
 
-class DeepMergeV2(nn.Module):
-    def __init__(self, use_bottleneck=False, new_cls=False, class_num=3):
-        super(DeepMergeV2, self).__init__()
-        self.class_num = class_num
-        self.use_bottleneck = use_bottleneck
-        self.new_cls = new_cls
-        self.in_features = 32 * 4 * 4
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=1, padding=0)
-        self.conv2 = nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=0)
-        self.conv3 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=0)
-        self.conv4 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=0)
-        self.batchn1 = nn.BatchNorm2d(16)
-        self.batchn2 = nn.BatchNorm2d(16)
-        self.batchn3 = nn.BatchNorm2d(32)
-        self.batchn4 = nn.BatchNorm2d(32)
-        self.fc1 = nn.Linear(32 * 4 * 4, 256)
-        self.fc2 = nn.Linear(256, class_num)
-        self.relu =  nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-    def forward(self, x):
-        x = self.maxpool(self.relu(self.batchn1(self.conv1(x))))
-        x = self.maxpool(self.relu(self.batchn2(self.conv2(x))))
-        x = self.maxpool(self.relu(self.batchn3(self.conv3(x))))
-        x = self.maxpool(self.relu(self.batchn4(self.conv4(x))))
-        x = x.view(-1, 32 * 4 * 4) # needs to be 512
-        y = F.relu(self.fc1(x))
-        y = self.fc2(y)
-        return x, y
-    def output_num(self):
-        return self.in_features 
 
 class DeepMergeV3(nn.Module):
     def __init__(self, use_bottleneck=True, bottleneck_dim=256, new_cls=3, class_num=3):
@@ -203,7 +162,7 @@ class DeepMergeV3(nn.Module):
         x = self.maxpool(self.relu(self.batchn1(self.conv1(x))))
         x = self.maxpool(self.relu(self.batchn2(self.conv2(x))))
         x = self.maxpool(self.relu(self.batchn3(self.conv3(x))))
-        x = x.view(-1, 32 * 12 * 12)
+        x = x.view(x.size(0), -1)
         if self.use_bottleneck and self.new_cls:
             x = self.bottleneck(x)
         y = self.fc(x)
@@ -215,16 +174,10 @@ class EndDMV3(nn.Module):
         self.class_num = class_num
         self.use_bottleneck = use_bottleneck
         self.new_cls = new_cls
-        self.bottleneck = nn.Linear(32 * 12 * 12, bottleneck_dim)
-        self.bottleneck.weight.data.normal_(0, 0.005)
-        self.bottleneck.bias.data.fill_(0.0)
         self.fc = nn.Linear(bottleneck_dim, class_num)
         self.fc.weight.data.normal_(0, 0.01)
         self.fc.bias.data.fill_(0.0)
 
     def forward(self, x):
-        x = x.view(-1, 32 * 12 * 12)
-        if self.use_bottleneck and self.new_cls:
-            x = self.bottleneck(x)
         y = self.fc(x)
-        return x, y
+        return y
