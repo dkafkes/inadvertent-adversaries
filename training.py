@@ -14,6 +14,8 @@ import tensorboard
 import tensorboardX
 from tensorboardX import SummaryWriter
 import pandas as pd
+from functools import partial
+from sklearn.metrics import pairwise_distances, pairwise
 
 
 class EarlyStopping(object):
@@ -53,6 +55,59 @@ class EarlyStopping(object):
             stop_sign = True
 
         return stop_sign
+
+
+def gaussian_kernel_matrix(x, y, sigmas):
+    '''
+    Gaussian RBF kernel to be used in MMD
+    Args:
+    x,y: latent features
+    sigmas: free parameter that determins the width of the kernel
+    Returns:
+    '''
+    beta = 1. / (2. * (torch.unsqueeze(sigmas, 1)))
+    dist = compute_pairwise_distances(x, y)
+    s = torch.matmul(beta, dist.contiguous().view(1, -1))
+    return torch.sum(torch.exp(-s), 0).view(*dist.size())
+
+
+def compute_pairwise_distances(x, y):
+    if not x.dim() == y.dim() == 2:
+        raise ValueError('Both inputs should be matrices.')
+    if x.size(1) != y.size(1):
+        raise ValueError('The number of features should be the same.')
+
+    norm = lambda x: torch.sum(torch.pow(x, 2), 1)
+    return torch.transpose(norm(torch.unsqueeze(x, 2) - torch.transpose(y, 0, 1)), 0, 1)
+
+
+def maximum_mean_discrepancy(x, y, kernel=gaussian_kernel_matrix):
+    ''' 
+    Calculate the matrix that includes all kernels k(xx), k(y,y) and k(x,y)
+    '''
+    cost = torch.mean(kernel(x, x))
+    cost += torch.mean(kernel(y, y))
+    cost -= 2 * torch.mean(kernel(x, y))
+    # We do not allow the loss to become negative. 
+    cost = torch.clamp(cost, min=0.0)
+    return cost
+
+
+def mmd_distance(hs, ht):
+    '''
+    Maximum Mean Discrepancy - MMD
+    Args:
+        hs: source domain embeddings
+        ht: target domain embeddings
+    Returns:
+        MMD value
+    '''
+    sigmas = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 5,
+              10, 15, 20, 25, 30, 35, 100, 1e3, 1e4, 1e5, 1e6]
+    gaussian_kernel = partial(gaussian_kernel_matrix,
+                              sigmas=torch.Tensor(sigmas).float().cuda())
+    loss_value = maximum_mean_discrepancy(hs, ht, kernel=gaussian_kernel)
+    return torch.clamp(loss_value, min=1e-4)
 
 
 ### make into a function
@@ -181,6 +236,184 @@ def train(base_network, dset_loaders, weights, epochs, early_stop_patience, outp
 
                     writer.add_scalar("Validation Total Loss", classifier_loss.data.cpu().float().item(), i/train_examples)
             
+                    if early_stop_engine.is_stop_training(classifier_loss.cpu().float().item()):
+                        out_file.write("overfitting after {}, stop training at epoch {}\n".format(early_stop_patience, i/train_examples))
+                        out_file.write("finish training! \n")
+                        out_file.close()
+                        torch.save(snapshot_obj, osp.join(output_path, "final_model.pth.tar"))
+
+                        sys.exit()
+
+    out_file.write("finish training! \n")
+    out_file.close()
+    torch.save(snapshot_obj, osp.join(output_path, "final_model.pth.tar"))
+
+
+
+def train_da(base_network, dset_loaders, weights, epochs, early_stop_patience, output_path, use_gpu):
+
+    best_acc, temp_acc, train_acc, transfer_loss, classifier_loss, total_loss  = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+
+    opt = optim.Adam(base_network.parameters(), lr = .00001, betas= (0.7, 0.8), weight_decay = .0001, amsgrad = False, eps = 1e-8) 
+    class_weight = torch.from_numpy(np.array(weights, dtype = np.float64))
+    tr_loss_weights = 0.01
+    class_criterion = nn.CrossEntropyLoss(weight=class_weight) 
+    early_stop_engine = EarlyStopping(early_stop_patience)
+    train_examples = len(dset_loaders["train"])
+    num_train_iterations = train_examples*epochs
+    train_examples_noisy = len(dset_loaders["train_noisy"])
+    num_valid_iterations_noisy = len(dset_loaders["valid_noisy"])
+    num_train_iterations = train_examples*epochs
+    snapshot_interval = num_train_iterations * 0.25
+    num_valid_iterations = len(dset_loaders["valid"])
+
+    if use_gpu:
+        base_network = base_network.cuda()
+
+    # set up summary writer
+    writer = SummaryWriter(output_path)
+
+    # Set log file
+    if not osp.exists(output_path):
+        os.makedirs(osp.join(output_path))
+        out_file = open(osp.join(output_path, "log.txt"), "w")
+    else:
+        out_file = open(osp.join(output_path, "log.txt"), "w")
+
+    #################
+    # Training step
+    #################
+
+
+    for i in range(0, num_train_iterations):
+        if i % train_examples == 0:
+            base_network.train(False)
+
+            #train_acc, _ = classification_test(dset_loaders, 'train', base_network, gpu=use_gpu, verbose = False, save_where = None)
+            #temp_acc, _ = classification_test(dset_loaders, 'valid', base_network, gpu=use_gpu, verbose = False, save_where = None)
+
+            snapshot_obj = {'epoch': i/train_examples, 
+                            "base_network": base_network.state_dict(), 
+                            'valid accuracy': temp_acc,
+                            'train accuracy' : train_acc,
+                            }
+            snapshot_obj['class_criterion'] = class_criterion.state_dict()
+
+            if (i+1) % snapshot_interval == 0:
+                torch.save(snapshot_obj, 
+                        osp.join(output_path, "epoch_{}_model.pth.tar".format(i/train_examples)))
+                    
+            if temp_acc > best_acc:
+                best_acc = temp_acc
+                # Save best model
+                torch.save(snapshot_obj, 
+                            osp.join(output_path, "best_model.pth.tar"))
+            log_str = "epoch: {}, validation accuracy: {:.5f}, training accuracy: {:.5f}\n".format(i/train_examples, temp_acc, train_acc)
+            out_file.write(log_str)
+            out_file.flush()
+            writer.add_scalar("Validation Accuracy", temp_acc, i/train_examples)
+            writer.add_scalar("Training Accuracy", train_acc, i/train_examples)
+
+        ## Train one iteration
+        base_network.train(True)
+        #opt.zero_grad()
+
+        try:
+            inputs_train, labels_train = iter(dset_loaders["train"]).next()
+            inputs_train_noisy, labels_train_noisy = iter(dset_loaders["train_noisy"]).next()
+        except StopIteration:
+            iter(dset_loaders["train"])
+            iter(dset_loaders["train_noisy"])
+
+        if use_gpu:
+            inputs_train, inputs_train_noisy, labels_train = Variable(inputs_train).cuda(), Variable(inputs_train_noisy).cuda(), Variable(labels_train).cuda()
+        else:
+            inputs_train, inputs_train_noisy, labels_train = Variable(inputs_train), Variable(inputs_train_noisy), Variable(labels_train)
+            
+        inputs = torch.cat((inputs_train, inputs_train_noisy), dim=0)
+        train_batch_size = inputs_train.size(0)
+
+        features, logits = base_network(inputs)
+        train_logits = logits.narrow(0, 0, train_batch_size)
+
+        #transfer loss
+        transfer_loss = mmd_distance(features[:train_batch_size], features[train_batch_size:])
+
+        # Source domain classification task loss
+        classifier_loss = class_criterion(train_logits, torch.argmax(labels_train.long(), axis = 1))
+
+        #classifier_loss.backward()
+        total_loss = tr_loss_weights * transfer_loss + classifier_loss
+        total_loss.backward()
+
+        opt.step()
+
+        if i % train_examples == 0:
+
+            train_acc, _ = classification_test(dset_loaders, 'train', base_network, gpu=use_gpu, verbose = False, save_where = None)
+
+            # Logging:
+            out_file.write('epoch {}: train total loss={:0.4f}, train transfer loss={:0.4f}, train classifier loss={:0.4f}\n'.format(
+                        i/train_examples, total_loss.data.cpu().float().item(), transfer_loss.data.cpu().float().item(), classifier_loss.data.cpu().float().item(),))
+            out_file.flush()
+
+            # Logging for tensorboard
+            writer.add_scalar("Training total loss", total_loss.data.cpu().float().item(), i/train_examples)
+            writer.add_scalar("Training classifier loss", classifier_loss.data.cpu().float().item(), i/train_examples)
+            writer.add_scalar("Training transfer loss", transfer_loss.data.cpu().float().item(), i/train_examples)
+
+                
+            #################
+            # Validation step
+            #################
+            for j in range(0, num_valid_iterations):
+                base_network.train(False)
+                with torch.no_grad():
+
+                    try:
+                        inputs_valid, labels_valid = iter(dset_loaders["valid"]).next()
+                        inputs_valid_noisy, labels_valid_noisy = iter(dset_loaders["valid_noisy"]).next()
+
+                    except StopIteration:
+                        iter(dset_loaders["valid"])
+                        iter(dset_loaders["valid_noisy"])
+
+                    if use_gpu:
+                        inputs_valid, inputs_valid_noisy, labels_valid = Variable(inputs_valid).cuda(), Variable(inputs_valid_noisy).cuda(), Variable(labels_valid).cuda()
+                    else:
+                        inputs_valid,inputs_valid_noisy, labels_valid = Variable(inputs_valid), Variable(inputs_valid_noisy).cuda(), Variable(labels_valid)
+                        
+                    valid_inputs = torch.cat((inputs_valid, inputs_valid_noisy), dim=0)
+                    valid_batch_size = inputs_valid.size(0)
+
+                    features, logits = base_network(valid_inputs)
+                    valid_logits = logits.narrow(0, 0, valid_batch_size)
+
+                    # Transfer loss - MMD
+                    transfer_loss = mmd_distance(features[:valid_batch_size], features[valid_batch_size:])
+                
+                    # Source domain classification task loss
+                    classifier_loss = class_criterion(valid_logits, torch.argmax(labels_valid.long(), axis = 1))
+
+                    # Final loss in case we do not want to add Fisher loss and Entropy minimization
+                    total_loss = tr_loss_weights * transfer_loss + classifier_loss
+
+                # Logging:
+                if j % num_valid_iterations == 0:
+                    temp_acc, _ = classification_test(dset_loaders, 'valid', base_network, gpu=use_gpu, verbose = False, save_where = None)
+
+                    out_file.write('epoch {}: valid total loss={:0.4f}, valid transfer loss={:0.4f}, valid classifier loss={:0.4f}\n'.format(
+                        i/train_examples, total_loss.data.cpu().float().item(), transfer_loss.data.cpu().float().item(), classifier_loss.data.cpu().float().item(),))
+                    out_file.flush()
+
+
+                    # Logging for tensorboard:
+                    writer.add_scalar("Validation total loss", total_loss.data.cpu().float().item(), i/train_examples)
+                    writer.add_scalar("Validation classifier loss", classifier_loss.data.cpu().float().item(), i/train_examples)
+                    writer.add_scalar("Validation transfer loss", transfer_loss.data.cpu().float().item(), i/train_examples)
+
+
+                    # Early stop in case we see overfitting
                     if early_stop_engine.is_stop_training(classifier_loss.cpu().float().item()):
                         out_file.write("overfitting after {}, stop training at epoch {}\n".format(early_stop_patience, i/train_examples))
                         out_file.write("finish training! \n")
