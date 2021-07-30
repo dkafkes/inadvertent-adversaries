@@ -112,11 +112,14 @@ def mmd_distance(hs, ht):
 
 ### make into a function
 def train(base_network, dset_loaders, weights, epochs, early_stop_patience, output_path, use_gpu):
+    class_weight = torch.from_numpy(np.array(weights, dtype = np.float64))
+    if use_gpu:
+        base_network = base_network.cuda()
+        class_weight = class_weight.cuda()
  
     classifier_loss, best_acc, temp_acc, train_acc = 0.0, 0.0, 0.0, 0.0
 
     opt = optim.Adam(base_network.parameters(), lr = .00001, betas= (0.7, 0.8), weight_decay = .001, amsgrad = False, eps = 1e-8) 
-    class_weight = torch.from_numpy(np.array(weights, dtype = np.float64))
     class_criterion = nn.CrossEntropyLoss(weight=class_weight) 
     early_stop_engine = EarlyStopping(early_stop_patience)
     train_examples = len(dset_loaders["train"])
@@ -251,11 +254,14 @@ def train(base_network, dset_loaders, weights, epochs, early_stop_patience, outp
 
 
 def train_da(base_network, dset_loaders, weights, epochs, early_stop_patience, output_path, use_gpu):
+    class_weight = torch.from_numpy(np.array(weights, dtype = np.float64))
+    if use_gpu:
+        base_network = base_network.cuda()
+        class_weight = class_weight.cuda()
 
     best_acc, temp_acc, train_acc, transfer_loss, classifier_loss, total_loss  = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
     opt = optim.Adam(base_network.parameters(), lr = .00001, betas= (0.7, 0.8), weight_decay = .0001, amsgrad = False, eps = 1e-8) 
-    class_weight = torch.from_numpy(np.array(weights, dtype = np.float64))
     tr_loss_weights = 0.01
     class_criterion = nn.CrossEntropyLoss(weight=class_weight) 
     early_stop_engine = EarlyStopping(early_stop_patience)
