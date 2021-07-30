@@ -105,7 +105,7 @@ def mmd_distance(hs, ht):
     sigmas = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1, 5,
               10, 15, 20, 25, 30, 35, 100, 1e3, 1e4, 1e5, 1e6]
     gaussian_kernel = partial(gaussian_kernel_matrix,
-                              sigmas=torch.Tensor(sigmas).float().cuda())
+                              sigmas=torch.Tensor(sigmas).double().cuda())
     loss_value = maximum_mean_discrepancy(hs, ht, kernel=gaussian_kernel)
     return torch.clamp(loss_value, min=1e-4)
 
