@@ -187,7 +187,7 @@ def wholesale_embedding_creator(base_network, loader, reg_dset_loader_key, noisy
 #           break
 #         return _images, _labels, network_classified, perturbed_images, perturbed_labels, _noisy_images, noisy_ground_truth, _noisy_classified
 
-def church_window(use_gpu, base_network, embedding_network, image, noisy_image, groundt_label, iters):
+def church_window(use_gpu, base_network, embedding_network, image, noisy_image, groundt_label, iters, save, name):
         
     if use_gpu:
         device = 'cuda'
@@ -195,18 +195,22 @@ def church_window(use_gpu, base_network, embedding_network, image, noisy_image, 
         device = 'cpu'
 
     base_network.to(device)
+    embedding_network.to(device)
     image.to(device)
     noisy_image.to(device)
+    print("Device:", device)
     
     _, logits = base_network(image)  
     softmax_output = nn.Softmax(dim=1)(1.0*logits)
     predicted_class = torch.argmax(softmax_output)
+    #print(logits, softmax_output)
     print("Ground truth: ", groundt_label)
     print("Predicted class: ", predicted_class)
 
     _, noisy_logits = base_network(noisy_image)
     noisy_softmax_output = nn.Softmax(dim=1)(1.0*noisy_logits)
     noisy_predicted_class = torch.argmax(noisy_softmax_output)
+    #print(noisy_logits, noisy_softmax_output)
     print("Noisy predicted class: ", noisy_predicted_class)  
 
     all_lab = [0, 1, 2]
@@ -215,7 +219,7 @@ def church_window(use_gpu, base_network, embedding_network, image, noisy_image, 
     for change_to in all_lab:
         print("Flip to: ", change_to)
 
-        worked, _, _, perturbed_img, iterations = attack(base_network, image.squeeze(0), true_label = groundt_label, target_label = change_to, iters = iters, verbose = True)
+        worked, _, _, perturbed_img, iterations = attack(base_network, image.squeeze(0).to(device), true_label = groundt_label, target_label = change_to, iters = iters, verbose = True)
 
         if worked:
             print("Worked at iteration : ", iterations)
@@ -224,14 +228,14 @@ def church_window(use_gpu, base_network, embedding_network, image, noisy_image, 
             noisy_embedding, noisy_logits = base_network(noisy_image)
             perturbed_embedding, perturbed_logits = base_network(perturbed_img.unsqueeze(0).to(device))
 
-            cw_plotter(False, embedding_network, groundt_label, change_to, embedding1, noisy_embedding, perturbed_embedding)
+            cw_plotter(False, embedding_network, groundt_label, change_to, embedding1, noisy_embedding, perturbed_embedding, save, name)
             return embedding1, noisy_embedding, perturbed_embedding
             
         else:
             print("Didn't flip within chosen max iterations.")
 
 
-def cw_plotter(use_gpu, embedding_network, groundt_label, change_to, embedding1, noisy_embedding, perturbed_embedding):
+def cw_plotter(use_gpu, embedding_network, groundt_label, change_to, embedding1, noisy_embedding, perturbed_embedding, save, name):
     LABELS = ('spiral', 'elliptical', 'merger')
 
     if use_gpu:
@@ -253,8 +257,28 @@ def cw_plotter(use_gpu, embedding_network, groundt_label, change_to, embedding1,
 
     out=np.zeros([len(x),len(x),3],dtype=np.uint8)
 
-    adv_direction = torch.subtract(perturbed_embedding.detach(), embedding1.detach())
-    noisy_direction = torch.subtract(noisy_embedding.detach(), embedding1.detach())
+    adv_direction = torch.sub(perturbed_embedding.detach(), embedding1.detach()) #used to be torch.subtract but that is not ued any more
+    noisy_direction = torch.sub(noisy_embedding.detach(), embedding1.detach())
+    
+    # TEST #######
+    logits_img = embedding_network(embedding1.unsqueeze(0).to(device)).squeeze(0)
+    softmax_output_img = nn.Softmax(dim=1)(1.0*logits_img)
+    adv_out_img = torch.argmax(softmax_output_img)
+    #print(logits_img, softmax_output_img)
+    #print("Predicted for image by embedding net:", adv_out_img)
+    
+    logits_n = embedding_network(noisy_embedding.unsqueeze(0).to(device)).squeeze(0)
+    softmax_output_n = nn.Softmax(dim=1)(1.0*logits_n)
+    adv_out_n = torch.argmax(softmax_output_n)
+    #print(logits_n, softmax_output_n)
+    #print("Predicted for noisy by embedding net:", adv_out_n)
+    
+    logits_p = embedding_network(perturbed_embedding.unsqueeze(0).to(device)).squeeze(0)
+    softmax_output_p = nn.Softmax(dim=1)(1.0*logits_p)
+    adv_out_p = torch.argmax(softmax_output_p)
+    #print(logits_p, softmax_output_p)
+    #print("Predicted for perturbed by embedding net:", adv_out_p)
+    ##########
 
     #you'd use Gram Schmidt here if you wanted to
     # ort = np.asarray([np.asarray(adv_direction), np.asarray(noisy_direction)])
@@ -269,8 +293,8 @@ def cw_plotter(use_gpu, embedding_network, groundt_label, change_to, embedding1,
             update=y[a]*noisy_direction+x[b]*adv_direction
             update=update.to(device)
 
-            image_adv=embedding1+update
-            logits = embedding_network(image_adv.unsqueeze(0).to(device))
+            image_adv=embedding1.to(device)+update.to(device)
+            logits = embedding_network(image_adv.unsqueeze(0).to(device)).squeeze(0)
             softmax_output = nn.Softmax(dim=1)(1.0*logits)
             adv_out = torch.argmax(softmax_output)
             
@@ -309,6 +333,8 @@ def cw_plotter(use_gpu, embedding_network, groundt_label, change_to, embedding1,
     plt.scatter([len(my_ax)//2], [np.where((my_ax < 1.0100000e+00) & (my_ax > 1.0000000e+00))], color = 'c', edgecolors = 'k', s = 70)
 
     plt.title(r'{} $\rightarrow$ {}'.format(LABELS[int(groundt_label)], LABELS[int(change_to)]))
+    if save:
+        plt.savefig('images/'+str(name)+'.png')
 
 
 def dist_metric(reg_embed, noise_embed, pert_embed, pnorm = 2.0):
