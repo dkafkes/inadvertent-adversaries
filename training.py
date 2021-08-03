@@ -472,7 +472,7 @@ def classification_test(loader, dictionary_val, model, gpu=True, verbose = False
     if verbose:
         output = pd.DataFrame()
 
-        df = pd.DataFrame(all_softmax_output.cpu().detach().numpy(), columns=['elliptical', 'spiral']) #i think? spiral = 1, elliptical = 0
+        df = pd.DataFrame(all_softmax_output.cpu().detach().numpy(), columns=['spiral','elliptical','merger'])
         output['model output'] = pd.Series(torch.max(all_output, 1)[1].cpu().detach().numpy())
         output['labels'] = pd.Series(all_label.cpu().detach().numpy())
 
