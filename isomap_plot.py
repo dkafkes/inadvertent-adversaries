@@ -12,11 +12,14 @@ import torch.nn.functional as F
 
 
 
-def isomap_plot(base_network, img_reg, img_noise, img_pert, three_dim=True, save=False, where=False):
+def isomap_plot(base_network, img_reg, img_noise, img_pert, num, three_dim=True, save=False, where=False):
   
+  ind = np.random.randint(0,len(img_reg),num)
+  num2 = 2 * num
+    
   base_network.to('cpu')
-  embedding_reg, logits_reg = base_network(img_reg)
-  embedding_noise, logits_noise = base_network(img_noise)
+  embedding_reg, logits_reg = base_network(img_reg[ind])
+  embedding_noise, logits_noise = base_network(img_noise[ind])
   embedding_pert, logits_pert = base_network(img_pert)
 
   total = []
@@ -52,13 +55,13 @@ def isomap_plot(base_network, img_reg, img_noise, img_pert, three_dim=True, save
     plt.title('Isomap 3D \n Curves: Y10 (orange), Y1 noisy (blue) \n Point color - predicted class: spiral (red), elliptical (blue), merger (black) \n Perturbed images - large points', fontsize=25)
 
     proj = model.fit_transform(total.detach().numpy())
-    ax.plot_trisurf(proj[:30, 0], proj[:30, 1], proj[:30, 2], cmap="autumn", alpha = 0.3)
-    ax.plot_trisurf(proj[30:60, 0], proj[30:60, 1], proj[30:60, 2],cmap="winter", alpha=0.3)
-    ax.plot_trisurf(proj[60:, 0], proj[60:, 1], proj[60:, 2],cmap="Reds", alpha=0.3)
+    ax.plot_trisurf(proj[:num, 0], proj[:num, 1], proj[:num, 2], cmap="autumn", alpha = 0.3)
+    ax.plot_trisurf(proj[num:num2, 0], proj[num:num2, 1], proj[num:num2, 2],cmap="winter", alpha=0.3)
+    ax.plot_trisurf(proj[num2:, 0], proj[num2:, 1], proj[num2:, 2],cmap="Reds", alpha=0.3)
 
-    ax.scatter(proj[:30, 0], proj[:30, 1], proj[:30, 2], c=color[predict_reg[:]],marker='o', s=40)
-    ax.scatter(proj[30:60, 0], proj[30:60, 1], proj[30:60, 2],c=color[predict_noi[:]],marker='o', s=40)
-    ax.scatter(proj[60:, 0], proj[60:, 1], proj[60:, 2],c=color[predict_pert[:]],marker='^', s=250)
+    ax.scatter(proj[:num, 0], proj[:num, 1], proj[:num, 2], c=color[predict_reg[:]],marker='o', s=40)
+    ax.scatter(proj[num:num2, 0], proj[num:num2, 1], proj[num:num2, 2],c=color[predict_noi[:]],marker='o', s=40)
+    ax.scatter(proj[num2:, 0], proj[num2:, 1], proj[num2:, 2],c=color[predict_pert[:]],marker='^', s=250)
 
   else:
     model = Isomap(n_components=2)
@@ -68,9 +71,9 @@ def isomap_plot(base_network, img_reg, img_noise, img_pert, three_dim=True, save
     plt.title('Isomap 2D \n Point color - predicted class: spiral (red), elliptical (blue), merger (black) \n Perturbed images - large points', fontsize=25)
 
     proj = model.fit_transform(total.detach().numpy())
-    ax.scatter(proj[:30, 0], proj[:30, 1], c=color[predict_reg[:]],marker='o', s=40)
-    ax.scatter(proj[30:60, 0], proj[30:60, 1] ,c=color[predict_noi[:]],marker='o', s=40)
-    ax.scatter(proj[60:, 0], proj[60:, 1], c=color[predict_pert[:]],marker='^', s=250)
+    ax.scatter(proj[:num, 0], proj[:num, 1], c=color[predict_reg[:]],marker='o', s=40)
+    ax.scatter(proj[num:num2, 0], proj[num:num2, 1] ,c=color[predict_noi[:]],marker='o', s=40)
+    ax.scatter(proj[num2:, 0], proj[num2:, 1], c=color[predict_pert[:]],marker='^', s=250)
 
   if save:
       plt.savefig(where+'.png')
@@ -78,11 +81,14 @@ def isomap_plot(base_network, img_reg, img_noise, img_pert, three_dim=True, save
 
 
 
-def isomap_video(base_network, img_reg, img_noise, img_pert, vert=True, save=False, where=False):
+def isomap_video(base_network, img_reg, img_noise, img_pert, num, vert=True, save=False, where=False):
+    
+  ind = np.random.randint(0,len(img_reg),num)
+  num2 = 2 * num
     
   base_network.to('cpu')
-  embedding_reg, logits_reg = base_network(img_reg)
-  embedding_noise, logits_noise = base_network(img_noise)
+  embedding_reg, logits_reg = base_network(img_reg[ind])
+  embedding_noise, logits_noise = base_network(img_noise[ind])
   embedding_pert, logits_pert = base_network(img_pert)
 
   total = []
@@ -124,13 +130,13 @@ def isomap_video(base_network, img_reg, img_noise, img_pert, vert=True, save=Fal
     model = Isomap(n_components=3)
     proj = model.fit_transform(total.detach().numpy())
 
-    ax.plot_trisurf(proj[:30, 0], proj[:30, 1], proj[:30, 2], cmap="autumn", alpha = 0.3)
-    ax.plot_trisurf(proj[30:60, 0], proj[30:60, 1], proj[30:60, 2],cmap="winter", alpha=0.3)
-    ax.plot_trisurf(proj[60:, 0], proj[60:, 1], proj[60:, 2],cmap="Reds", alpha=0.3)
+    ax.plot_trisurf(proj[:num, 0], proj[:num, 1], proj[:num, 2], cmap="autumn", alpha = 0.3)
+    ax.plot_trisurf(proj[num:num2, 0], proj[num:num2, 1], proj[num:num2, 2],cmap="winter", alpha=0.3)
+    ax.plot_trisurf(proj[num2:, 0], proj[num2:, 1], proj[num2:, 2],cmap="Reds", alpha=0.3)
 
-    ax.scatter(proj[:30, 0], proj[:30, 1], proj[:30, 2], c=color[predict_reg[:]],marker='o', s=40)
-    ax.scatter(proj[30:60, 0], proj[30:60, 1], proj[30:60, 2],c=color[predict_noi[:]],marker='o', s=40)
-    ax.scatter(proj[60:, 0], proj[60:, 1], proj[60:, 2],c=color[predict_pert[:]],marker='^', s=250)
+    ax.scatter(proj[:num, 0], proj[:num, 1], proj[:num, 2], c=color[predict_reg[:]],marker='o', s=40)
+    ax.scatter(proj[num:num2, 0], proj[num:num2, 1], proj[num:num2, 2],c=color[predict_noi[:]],marker='o', s=40)
+    ax.scatter(proj[num2:, 0], proj[num2:, 1], proj[num2:, 2],c=color[predict_pert[:]],marker='^', s=250)
     return fig,
 
   if vert:
